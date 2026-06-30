@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QR CODE HUNT ห้องสมุด</title>
+
+<style>
+body{
+margin:0;
+font-family:sans-serif;
+background:radial-gradient(circle,#0f172a,#000);
+color:white;
+overflow:hidden;
+}
+
+.container{
+position:absolute;
+top:50%;
+left:50%;
+transform:translate(-50%,-50%);
+width:90%;
+max-width:420px;
+background:rgba(0,0,0,0.7);
+padding:20px;
+border-radius:16px;
+text-align:center;
+}
+
+input,button{
+width:100%;
+padding:12px;
+margin:6px 0;
+border:none;
+border-radius:10px;
+font-size:16px;
+}
+
+button{
+background:#7c3aed;
+color:white;
+font-weight:bold;
+cursor:pointer;
+}
+
+.choice{
+background:rgba(255,255,255,0.1);
+color:white;
+}
+
+.correct{background:#22c55e !important;}
+.wrong{background:#ef4444 !important;}
+
+#countdown{
+font-size:70px;
+color:#facc15;
+text-shadow:0 0 20px #facc15;
+}
+
+#timer{
+margin-top:10px;
+color:#fbbf24;
+}
+
+.cardRow{
+display:flex;
+gap:6px;
+margin:8px 0;
+}
+
+.cardBtn{
+flex:1;
+padding:10px;
+background:#1f2937;
+border-radius:8px;
+cursor:pointer;
+}
+
+.cardBtn.active{
+background:#22c55e;
+}
+
+.danger{
+animation:shake 0.2s infinite;
+}
+
+@keyframes shake{
+0%{transform:translate(0);}
+25%{transform:translate(-3px);}
+50%{transform:translate(3px);}
+100%{transform:translate(0);}
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div id="setup">
+<h2>📚 QR CODE HUNT</h2>
+
+<input id="playerName" placeholder="ชื่อผู้เล่น">
+
+<p>เลือกบัตร A - E</p>
+
+<div class="cardRow">
+<div class="cardBtn" onclick="setCard('A')">A</div>
+<div class="cardBtn" onclick="setCard('B')">B</div>
+<div class="cardBtn" onclick="setCard('C')">C</div>
+<div class="cardBtn" onclick="setCard('D')">D</div>
+<div class="cardBtn" onclick="setCard('E')">E</div>
+</div>
+
+<button onclick="startGame()">เริ่มเกม</button>
+</div>
+
+<div id="countdown"></div>
+<div id="game"></div>
+
+</div>
+
+<script>
+
+/* ================= STATE ================= */
+let qSet=[], i=0, score=0, timer;
+let selectedCard="";
+
+/* ================= FX LAYER (FIXED) ================= */
+const fx = document.createElement("div");
+fx.style.position="fixed";
+fx.style.top="0";
+fx.style.left="0";
+fx.style.width="100vw";
+fx.style.height="100vh";
+fx.style.pointerEvents="none";
+fx.style.zIndex="9999";
+fx.style.overflow="hidden";
+document.body.appendChild(fx);
+
+/* ================= QUESTIONS ================= */
+const pool = [
+{q:"คำใดเป็นคำกริยา?",c:["วิ่ง","บ้าน","แมว","โต๊ะ"],a:0},
+{q:"คำราชาศัพท์ของคำว่า ‘กิน’ คืออะไร?",c:["เสวย","รับประทาน","ทาน","กิน"],a:1},
+{q:"คำว่า ‘เขียน’ จัดเป็นอะไร?",c:["กริยา","คำนาม","วิเศษณ์","ตัวเลข"],a:0},
+{q:"ข้อใดเป็นคำนาม?",c:["หนังสือ","วิ่ง","สวย","เร็ว"],a:0},
+{q:"คำว่า ‘อ่าน’ ใช้ทำอะไร?",c:["สื่อสาร","เล่น","นอน","วิ่ง"],a:0},
+
+{q:"คำราชาศัพท์ของ ‘นอน’ คืออะไร?",c:["บรรทม","หลับ","พัก","นั่ง"],a:0},
+{q:"คำว่า ‘สุภาพ’ หมายถึงอะไร?",c:["เรียบร้อย","ดุ","เร็ว","ดัง"],a:0},
+{q:"คำว่า ‘ภาษา’ ใช้เพื่ออะไร?",c:["สื่อสาร","วาด","วิ่ง","กิน"],a:0},
+{q:"คำว่า ‘น้ำ’ จัดเป็นอะไร?",c:["คำนาม","กริยา","สี","เสียง"],a:0},
+{q:"ข้อใดเป็นการกระทำ?",c:["เขียน","บ้าน","แมว","โต๊ะ"],a:0},
+
+{q:"คำราชาศัพท์ของ ‘มือ’ คืออะไร?",c:["พระหัตถ์","พระบาท","พระกร","พระเนตร"],a:0},
+{q:"ข้อใดเป็นคำกริยา?",c:["เดิน","บ้าน","โต๊ะ","แมว"],a:0},
+{q:"คำว่า ‘เสวย’ ใช้กับอะไร?",c:["กินแบบราชา","เดิน","นอน","พูด"],a:0},
+{q:"ข้อใดใช้ภาษาได้ถูกต้อง?",c:["ฉันไปโรงเรียน","ไปฉัน","โรงเรียนไปฉัน","ฉันโรงเรียนไป"],a:0},
+{q:"คำว่า ‘โรงเรียน’ ใช้ทำอะไร?",c:["เรียน","เล่น","ขาย","นอน"],a:0},
+
+{q:"คำว่า ‘แมว’ จัดเป็นอะไร?",c:["สัตว์","สี","คน","เสียง"],a:0},
+{q:"คำว่า ‘สื่อสาร’ หมายถึงอะไร?",c:["ส่งความเข้าใจ","วิ่ง","กิน","นอน"],a:0},
+{q:"ข้อใดเป็นคำนาม?",c:["โรงเรียน","วิ่ง","สวย","กิน"],a:0},
+{q:"คำว่า ‘วิ่งเร็ว’ คืออะไร?",c:["กริยา+วิเศษณ์","นาม+นาม","สี+สี","ตัวเลข"],a:0},
+{q:"ข้อใดเป็นประโยคสมบูรณ์?",c:["ฉันกินข้าว","กิน","ข้าว","แล้ว"],a:0},
+
+{q:"คำราชาศัพท์ใช้กับใคร?",c:["พระมหากษัตริย์","เพื่อน","สัตว์","ของเล่น"],a:0},
+{q:"คำว่า ‘เขียน’ คืออะไร?",c:["กริยา","นาม","สี","เสียง"],a:0},
+{q:"คำว่า ‘อ่านหนังสือ’ คืออะไร?",c:["การกระทำ","ชื่อคน","ชื่อสี","ชื่อสถานที่"],a:0},
+{q:"คำว่า ‘ภาษาไทย’ ใช้เพื่ออะไร?",c:["สื่อสาร","วาดรูป","วิ่ง","กิน"],a:0},
+{q:"ข้อใดคือความหมายของภาษา?",c:["เครื่องมือสื่อสาร","สี","เสียง","รูปภาพ"],a:0}
+];
+
+/* shuffle */
+function shuffle(a){
+return a.sort(()=>Math.random()-0.5);
+}
+
+const questions = {
+A: shuffle(pool).slice(0,5),
+B: shuffle(pool).slice(5,10),
+C: shuffle(pool).slice(10,15),
+D: shuffle(pool).slice(15,20),
+E: shuffle(pool).slice(20,25)
+};
+
+/* ================= FX SAFE ================= */
+function flash(color,text,emoji=""){
+const box=document.createElement("div");
+
+box.style.position="absolute";
+box.style.top="50%";
+box.style.left="50%";
+box.style.transform="translate(-50%,-50%)";
+box.style.padding="12px 16px";
+box.style.maxWidth="80%";
+box.style.textAlign="center";
+box.style.borderRadius="12px";
+box.style.background="rgba(0,0,0,0.6)";
+box.style.color=color;
+box.style.fontSize="20px";
+box.style.textShadow=`0 0 10px ${color}`;
+
+box.innerHTML=`${emoji}<br>${text}`;
+
+fx.appendChild(box);
+
+setTimeout(()=>box.remove(),900);
+}
+
+/* 👻 ghost */
+function ghost(){
+const g=document.createElement("div");
+g.innerHTML="👻";
+
+g.style.position="absolute";
+g.style.top="45%";
+g.style.left="50%";
+g.style.transform="translate(-50%,-50%)";
+g.style.fontSize="70px";
+g.style.filter="drop-shadow(0 0 10px red)";
+
+fx.appendChild(g);
+
+setTimeout(()=>g.remove(),700);
+}
+
+/* ================= GAME ================= */
+function setCard(c){
+selectedCard=c;
+document.querySelectorAll(".cardBtn").forEach(b=>b.classList.remove("active"));
+event.target.classList.add("active");
+}
+
+function startGame(){
+
+if(!questions[selectedCard]) return alert("เลือกบัตร");
+
+qSet=questions[selectedCard];
+i=0;
+score=0;
+
+document.getElementById("setup").style.display="none";
+
+let cd=document.getElementById("countdown");
+let n=5;
+
+cd.innerHTML=n;
+
+let t=setInterval(()=>{
+
+n--;
+cd.innerHTML=n;
+
+flash("#facc15","กำลังเปิดประตู...","🚪");
+
+if(n<=0){
+clearInterval(t);
+cd.innerHTML="";
+show();
+startTimer();
+flash("#22c55e","เริ่มภารกิจ","✨");
+}
+},1000);
+}
+
+function startTimer(){
+clearInterval(timer);
+let time=15;
+
+timer=setInterval(()=>{
+time--;
+document.getElementById("timer").innerHTML="⏱ "+time;
+
+if(time<=0) next();
+},1000);
+}
+
+function show(){
+
+flash("#60a5fa",`ไปจุดที่ ${i+1}`,"📍");
+
+let q=qSet[i];
+
+document.getElementById("game").innerHTML=`
+<div id="timer"></div>
+<h2>ข้อ ${i+1}</h2>
+<p>${q.q}</p>
+
+${q.c.map((x,idx)=>
+`<button class="choice" onclick="answer(${idx})">${x}</button>`
+).join("")}
+
+<p>คะแนน: ${score}</p>
+`;
+}
+
+window.answer=(x)=>{
+
+let q=qSet[i];
+let btns=document.querySelectorAll(".choice");
+
+btns.forEach(b=>b.disabled=true);
+
+if(x===q.a){
+score++;
+flash("#22c55e","ถูกต้อง","✨");
+}else{
+ghost();
+flash("#ef4444","ผิด","💀");
+btns[q.a].classList.add("correct");
+btns[x].classList.add("wrong");
+}
+
+setTimeout(()=>next(),1100);
+};
+
+function next(){
+i++;
+
+if(i<qSet.length){
+flash("#a78bfa","เปิดประตูถัดไป...","🚪");
+setTimeout(show,700);
+setTimeout(startTimer,700);
+}else{
+flash("#fbbf24","จบภารกิจ","🏆");
+
+document.getElementById("game").innerHTML=
+`<h2>🎮 จบเกม</h2><p>คะแนน: ${score}/5</p>`;
+}
+}
+
+</script>
+
+</body>
+  </html>
